@@ -249,3 +249,11 @@ app.get("*", (req,res) => {
 app.listen(port, () => {
 	console.log("Node application listening on port "+port);
 }); 
+
+function isLoggedIn(req) {
+  return req.session.authenticated;
+}
+
+function getUsername(req){
+  return req.session.username;
+}
