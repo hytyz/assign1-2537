@@ -1,0 +1,13 @@
+<%- include("templates/header") %> 
+	<div class="fs-1 text-center">Users:</div>
+    <div class=" d-flex row mb-3 text-center ml-auto">
+        <% let i=0; %>
+		<% for(i=0; i < users.length; i++) { %>
+            
+        <%- include('templates/user', {user: users[i]})  %> 
+        <%=  %> 
+        <button onclick="demote()" class="btn border border-dark btn-success px-3 mx-1">promote to admin</button>
+        <button onclick="promote()" class="btn border border-dark btn-danger px-3 mx-1">demote to user</button>
+        </div>
+        <% } %>
+        </div>

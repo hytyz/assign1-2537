@@ -1,0 +1,11 @@
+<%- include("templates/header") %> 
+    <div class="fs-1 d-flex flex-row justify-content-center">create user</div>
+    <br/>
+    <div class="d-flex flex-row justify-content-center">
+    <form action='/submitUser' method='post'>
+    <input class="p-2" name='username' type='text' placeholder='username'>
+    <input class="p-2" name='password' type='password' placeholder='password'>
+    <button class="p-2 btn btn-primary">Submit</button>
+    </form>
+    </div>
+<%- include("templates/footer") %> 

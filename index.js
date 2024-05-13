@@ -1,6 +1,5 @@
 
 require("./utils.js");
-
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
@@ -31,6 +30,8 @@ var {database} = include('databaseConnection');
 
 const userCollection = database.db(mongodb_database).collection('users');
 
+app.set('view engine', 'ejs');
+
 app.use(express.urlencoded({extended: false}));
 
 var mongoStore = MongoStore.create({
@@ -48,28 +49,43 @@ app.use(session({
 }
 ));
 
-app.get('/', (req,res) => {
-    let html;
-  //If logged in, display members and logout
+function isValidSession(req) {
   if (req.session.authenticated) {
-    html = `
-    Hello, ${getUsername(req)}
-    <form action='/members' method='get'>
-      <button>Members Page</button>
-    </form>
-    <form action='/logout' method='get'><button>Logout</button></form>
-    `;
-  } else {
-    // else display links to signup and signin
-    html = `
-    <form action='/createUser' method='get'>
-      <button>Sign up!</button>
-    </form>
-    <form action='/login' method='get'>
-      <button>Log in!</button>
-    </form>`;
+      return true;
   }
-  res.send(html);
+  return false;
+}
+
+function sessionValidation(req,res,next) {
+  if (isValidSession(req)) {
+      next();
+  }
+  else {
+      res.redirect('/login');
+  }
+}
+
+
+function isAdmin(req) {
+  if (req.session.user_type == 'admin') {
+      return true;
+  }
+  return false;
+}
+
+function adminAuthorization(req, res, next) {
+  if (!isAdmin(req)) {
+      res.status(403);
+      res.render("errorMessage", {error: "Not Authorized"});
+      return;
+  }
+  else {
+      next();
+  }
+}
+
+app.get('/', (req,res) => {
+  res.render("index", {auth: req.session.authenticated, user: req.session.username});
 });
 
 app.get('/nosql-injection', async (req,res) => {
@@ -99,28 +115,12 @@ app.get('/nosql-injection', async (req,res) => {
 
 
 app.get('/createUser', (req,res) => {
-    var html = `
-    create user
-    <form action='/submitUser' method='post'>
-    <input name='username' type='text' placeholder='username'>
-    <input name='password' type='password' placeholder='password'>
-    <button>Submit</button>
-    </form>
-    `;
-    res.send(html);
+  res.render("createUser");
 });
 
 
 app.get('/login', (req,res) => {
-    var html = `
-    log in
-    <form action='/loggingin' method='post'>
-    <input name='username' type='text' placeholder='username'>
-    <input name='password' type='password' placeholder='password'>
-    <button>Submit</button>
-    </form>
-    `;
-    res.send(html);
+  res.render("login");
 });
 
 app.post('/submitUser', async (req,res) => {
@@ -142,13 +142,13 @@ app.post('/submitUser', async (req,res) => {
 
     var hashedPassword = await bcrypt.hash(password, saltRounds);
 	
-	await userCollection.insertOne({username: username, password: hashedPassword});
+	await userCollection.insertOne({username: username, password: hashedPassword, user_type: "user"});
 	console.log("Inserted user");
 
-    var html = "successfully created user" 
-    + "<form action='/' method='get'><button>Return to homepage</button></form>";
-    res.send(html);
+    var html = "successfully created user";
+    res.render("submitUser", {html: html});
 });
+
 
 app.post('/loggingin', async (req,res) => {
     var username = req.body.username;
@@ -162,7 +162,7 @@ app.post('/loggingin', async (req,res) => {
 	   return;
 	}
 
-	const result = await userCollection.find({username: username}).project({username: 1, password: 1, _id: 1}).toArray();
+	const result = await userCollection.find({username: username}).project({username: 1, password: 1, user_type: 1, _id: 1}).toArray();
 
 	console.log(result);
 	if (result.length != 1) {
@@ -174,6 +174,7 @@ app.post('/loggingin', async (req,res) => {
 		console.log("correct password");
 		req.session.authenticated = true;
 		req.session.username = username;
+    req.session.user_type = result[0].user_type;
 		req.session.cookie.maxAge = expireTime;
 
 		res.redirect('/loggedIn');
@@ -186,25 +187,21 @@ app.post('/loggingin', async (req,res) => {
 	}
 });
 
+//app.use('/loggedin', sessionValidation);
 app.get('/loggedin', (req,res) => {
     if (!req.session.authenticated) {
         res.redirect('/login');
     }
-    var html = `
-    You are logged in!
-    <form action='/' method='get'><button>Return to homepage</button></form>
-    <form action='/logout' method='get'><button>Logout</button></form>
-    `;
-    res.send(html);
+    res.render("loggedin");
+});
+
+app.get('/loggedin/info', (req,res) => {
+    res.render("loggedin-info");
 });
 
 app.get('/logout', (req,res) => {
 	req.session.destroy();
-    var html = `
-    You are logged out.
-    <form action='/' method='get'><button>Return to homepage</button></form>
-    `;
-    res.send(html);
+  res.render("loggedout");
 });
 
 
@@ -215,45 +212,22 @@ app.get('/members', (req,res) => {
     }
 
     var cat = Math.floor(Math.random() * 3);
-    switch(cat) {
-        case 1:
-            res.send("Lucifer:<br/><img src='/lucifer.jpg' style='width:250px;margin-bottom:15px;'>"
-            +"<form action='/logout' method='get'><button>Logout</button></form>"
-            +"<form action='/' method='get'><button>Return to homepage</button></form>"
-            );
-          break;
-        case 2:
-            res.send("Milka:<br/><img src='/milka.jpg' style='width:250px;margin-bottom:15px;'>"
-            +"<form action='/logout' method='get'><button>Logout</button></form>"
-            +"<form action='/' method='get'><button>Return to homepage</button></form>"
-            );
-          break;
-        default:
-            res.send("Shiro:<br/><img src='/shiro.jpg' style='width:250px;margin-bottom:15px;'>"
-            +"<form action='/logout' method='get'><button>Logout</button></form>"
-            +"<form action='/' method='get'><button>Return to homepage</button></form>"
-            );
-            break;
-      } 
-      
+    res.render("members", {cat: cat});
 });
 
+app.get('/admin', sessionValidation, adminAuthorization, async (req,res) => {
+  const result = await userCollection.find().project({username: 1, _id: 1, user_type: 1}).toArray();
+
+  res.render("admin", {users: result});
+});
 
 app.use(express.static(__dirname + "/public"));
 
 app.get("*", (req,res) => {
 	res.status(404);
-	res.send("404. grats. you broke it.<br/><form action='/' method='get'><button>Return to homepage</button></form>");
+	res.render("404");
 })
 
 app.listen(port, () => {
 	console.log("Node application listening on port "+port);
 }); 
-
-function isLoggedIn(req) {
-  return req.session.authenticated;
-}
-
-function getUsername(req){
-  return req.session.username;
-}
